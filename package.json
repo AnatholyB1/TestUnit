@@ -1,0 +1,27 @@
+{
+  "name": "user-test-recorder",
+  "version": "1.0.0",
+  "description": "A Chrome extension to record and replay user clicks for testing purposes.",
+  "main": "manifest.json",
+  "scripts": {
+    "build": "webpack --mode production --config config/webpack.config.js",
+    "dev": "webpack --mode development --watch --config config/webpack.config.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "testing",
+    "user-interaction"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.27.4",
+    "@babel/preset-env": "^7.27.2",
+    "babel-loader": "^10.0.0",
+    "webpack": "^5.99.9",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "copy-webpack-plugin": "^13.0.0"
+  }
+}

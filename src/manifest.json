@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "User Test Recorder",
+  "version": "0.1",
+  "description": "Record and replay user clicks for testing.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "icons": {
+    "16": "icons/icon-16x16.png",
+    "48": "icons/icon-48x48.png",
+    "128": "icons/icon-128x128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "User Test Recorder"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}

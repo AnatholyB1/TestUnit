@@ -1,1 +1,16 @@
-nodes_modules/    
+# Dépendances
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+
+# Fichiers de build
+/dist
+/build
+
+# Fichiers d'environnement
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
