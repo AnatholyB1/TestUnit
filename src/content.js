@@ -1,13 +1,12 @@
 console.log("Content script loaded and running!");
-let clickListener = null;
+let eventListeners = null;
 
 
 
 
-// Fonction qui configure l'écouteur de clics
-function setupClickListener() {
-  console.log("Setting up click position listener");
-  // Fonction pour afficher une indication visuelle du clic
+function setupEventListeners() {
+  console.log("Setting up all event listeners");
+
   function showClickVisual(x, y) {
     // Créer l'élément visuel
     const visual = document.createElement('div');
@@ -46,34 +45,79 @@ function setupClickListener() {
     }, 500);
   }
   
-  
-  return function (e) {
-    
+  // Handler pour les clics (code existant)
+  const clickHandler = function(e) {
     // Afficher l'effet visuel à l'endroit du clic
     showClickVisual(e.clientX, e.clientY);
-
-    // Capturer les coordonnées du clic
+    
     const clickData = {
-      x: e.clientX,            // Position X relative à la fenêtre visible
-      y: e.clientY,            // Position Y relative à la fenêtre visible
-      pageX: e.pageX,          // Position X relative au document (utile pour le scrolling)
-      pageY: e.pageY,          // Position Y relative au document
-      scrollX: window.scrollX, // Position de défilement horizontal
-      scrollY: window.scrollY, // Position de défilement vertical
+      type: "click",  // Ajouter un type d'événement pour distinguer les actions
+      x: e.clientX,
+      y: e.clientY,
+      pageX: e.pageX,
+      pageY: e.pageY,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
       timestamp: Date.now(),
-      windowWidth: window.innerWidth,  // Pour tenir compte du redimensionnement
+      windowWidth: window.innerWidth,
       windowHeight: window.innerHeight
     };
     
-    console.log("Click position detected:", clickData);
-    
     chrome.runtime.sendMessage({ 
-      action: "addClick", 
-      clickData: clickData 
-    }, response => {
-      console.log("Click position recorded, response:", response);
+      action: "addEvent", 
+      eventData: clickData 
     });
   };
+  
+  // Nouveau handler pour les événements de défilement avec throttling
+  let lastScrollTime = 0;
+  let lastScrollPosition = { x: window.scrollX, y: window.scrollY };
+  const scrollThrottle = 150; // Ms entre les enregistrements de défilement
+  
+  const scrollHandler = function() {
+    const now = Date.now();
+    const currentPosition = { x: window.scrollX, y: window.scrollY };
+    
+    // N'enregistrer que si suffisamment de temps s'est écoulé ET la position a changé
+    if (now - lastScrollTime > scrollThrottle && 
+        (currentPosition.x !== lastScrollPosition.x || 
+         currentPosition.y !== lastScrollPosition.y)) {
+      
+      lastScrollTime = now;
+      lastScrollPosition = currentPosition;
+      
+      const scrollData = {
+        type: "scroll",  // Identifie le type d'événement
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+        timestamp: now
+      };
+      
+      console.log("Scroll recorded:", scrollData);
+      
+      chrome.runtime.sendMessage({ 
+        action: "addEvent", 
+        eventData: scrollData 
+      });
+    }
+  };
+  
+  // Ajouter les écouteurs
+  document.addEventListener("click", clickHandler);
+  document.addEventListener("scroll", scrollHandler, { passive: true });
+  
+  // Retourner les handlers pour pouvoir les supprimer plus tard
+  return {
+    click: clickHandler,
+    scroll: scrollHandler
+  };
+}
+
+// Ajuster le code qui retire les écouteurs
+if (eventListeners) {
+  document.removeEventListener("click", eventListeners.click);
+  document.removeEventListener("scroll", eventListeners.scroll);
+  eventListeners = null;
 }
 
 // Écouter les changements de statut d'enregistrement
@@ -83,14 +127,14 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "local" && changes.recording) {
     console.log("Recording status changed:", changes.recording);
     if (changes.recording.newValue === true) {
-      console.log("Recording started - adding click listener");
-      clickListener = setupClickListener();  // Appel de la fonction ici
-      document.addEventListener("click", clickListener);
+      console.log("Recording started - adding event listeners");
+      eventListeners = setupEventListeners();  // Appel à setupEventListeners() au lieu de setupClickListener()
     } else if (changes.recording.oldValue === true) {
-      console.log("Recording stopped - removing click listener");
-      if (clickListener) {
-        document.removeEventListener("click", clickListener);
-        clickListener = null;
+      console.log("Recording stopped - removing event listeners");
+      if (eventListeners) {
+        document.removeEventListener("click", eventListeners.click);
+        document.removeEventListener("scroll", eventListeners.scroll);
+        eventListeners = null;
       }
     }
   }
@@ -100,53 +144,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 chrome.storage.local.get("recording", ({ recording }) => {
   console.log("Content script loaded, recording status:", recording);
   if (recording) {
-    clickListener = setupClickListener();  // Appel de la fonction ici
-    document.addEventListener("click", clickListener);
+    eventListeners = setupEventListeners();  // Appel à setupEventListeners() au lieu de setupClickListener()
   }
 });
-
-
-function replayClicks() {
-  chrome.storage.local.get("clicks", (data) => {
-    const clicks = data.clicks || [];
-    console.log(`Replaying ${clicks.length} click positions`);
-    
-    if (!clicks || clicks.length === 0) {
-      console.log("No clicks to replay");
-      return;
-    }
-    
-    const baseTime = clicks[0].timestamp;
-    
-    clicks.forEach((click) => {
-      const delay = click.timestamp - baseTime;
-      
-      setTimeout(() => {
-        // Rétablir la position de défilement
-        window.scrollTo(click.scrollX, click.scrollY);
-        
-        // Petit délai pour laisser le temps au défilement
-        setTimeout(() => {
-          // Créer un événement de clic aux coordonnées enregistrées
-          const clickEvent = new MouseEvent('click', {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-            clientX: click.x,
-            clientY: click.y
-          });
-          
-          // Obtenir l'élément à la position du clic
-          const elementAtPoint = document.elementFromPoint(click.x, click.y);
-          
-          if (elementAtPoint) {
-            console.log(`Clicking at position (${click.x}, ${click.y}) on element:`, elementAtPoint);
-            elementAtPoint.dispatchEvent(clickEvent);
-          } else {
-            console.warn(`No element found at position (${click.x}, ${click.y})`);
-          }
-        }, 100); // Petit délai après le scroll
-      }, delay);
-    });
-  });
-}

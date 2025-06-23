@@ -1,42 +1,34 @@
 let recordingState = {
-    isRecording: false,
-    clicks: []
-  };
-  
-  // Initialiser l'état depuis le stockage au démarrage
-  chrome.storage.local.get(['recording', 'clicks'], (data) => {
-    console.log("Background script loaded, initial state:", data);  
-    if (data.recording) recordingState.isRecording = data.recording;
-    if (data.clicks) recordingState.clicks = data.clicks;
-  });
-  
-  // Gérer les messages des content scripts et popup
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("Background received message:", message);
-    
-    if (message.action === "startRecording") {
-      console.log("Starting recording session");
-      recordingState.isRecording = true;
-      recordingState.clicks = [];
-      chrome.storage.local.set({ recording: true, clicks: [] });
-      sendResponse({ status: "recording_started" });
+  isRecording: false,
+  events: []
+};
+
+// Initialiser l'état depuis le stockage au démarrage
+chrome.storage.local.get(['recording', 'events', 'savedRecordings'], (data) => {
+  if (data.recording) recordingState.isRecording = data.recording;
+  if (data.events) recordingState.events = data.events;
+});
+
+// Gérer les messages
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "startRecording") {
+    recordingState.isRecording = true;
+    recordingState.events = [];  // Utiliser events au lieu de clicks
+    chrome.storage.local.set({ recording: true, events: [] });
+    sendResponse({ status: "recording_started" });
+  }
+  else if (message.action === "stopRecording") {
+    recordingState.isRecording = false;
+    chrome.storage.local.set({ recording: false });
+    sendResponse({ status: "recording_stopped" });
+  }
+  else if (message.action === "addEvent") {  // Renommer addClick en addEvent
+    if (recordingState.isRecording) {
+      console.log("Adding event:", message.eventData);
+      recordingState.events.push(message.eventData);
+      chrome.storage.local.set({ events: recordingState.events });
+      sendResponse({ status: "event_recorded", eventCount: recordingState.events.length });
     }
-    else if (message.action === "stopRecording") {
-      console.log("Stopping recording session");
-      recordingState.isRecording = false;
-      chrome.storage.local.set({ recording: false });
-      sendResponse({ status: "recording_stopped" });
-    }
-    else if (message.action === "addClick") {
-      if (recordingState.isRecording) {
-        console.log("Adding click:", message.clickData);
-        recordingState.clicks.push(message.clickData);
-        chrome.storage.local.set({ clicks: recordingState.clicks });
-        sendResponse({ status: "click_recorded", clickCount: recordingState.clicks.length });
-      } else {
-        console.log("Click ignored - not recording");
-        sendResponse({ status: "ignored", reason: "not_recording" });
-      }
-    }
-    return true; // Important pour garder le canal de message ouvert pour les réponses asynchrones
-  });
+  }
+  return true;
+});
