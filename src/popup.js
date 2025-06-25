@@ -12,15 +12,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const dialogTitle = document.getElementById("dialog-title");
   const dialogCancelBtn = document.getElementById("dialog-cancel");
   const dialogSaveBtn = document.getElementById("dialog-save");
+
+  // Champs du formulaire
+  const testerNameInput = document.getElementById("tester-name");
+  const environmentInput = document.getElementById("environment");
+  const usLinkInput = document.getElementById("us-link");
+  const testUrlInput = document.getElementById("test-url");
+  const prerequisitesInput = document.getElementById("prerequisites");
   
   // Conteneur des enregistrements sauvegardés
   const savedRecordingsContainer = document.getElementById("saved-recordings");
   
   // État actuel
   let currentRecording = null;
+  let currentUrl = "";
   
   // Charger les enregistrements sauvegardés au démarrage
   loadSavedRecordings();
+
+    // Obtenir l'URL actuelle
+  chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+    if (tabs && tabs[0] && tabs[0].url) {
+      currentUrl = tabs[0].url;
+    }
+  });
   
   // Écouteurs pour les boutons principaux
   startBtn.addEventListener("click", startRecording);
@@ -35,10 +50,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fonction pour démarrer l'enregistrement
   function startRecording() {
     chrome.runtime.sendMessage({ action: "startRecording" }, (response) => {
-      console.log("Start recording response:", response);
       if (response && response.status === "recording_started") {
         saveBtn.disabled = true;
         startBtn.disabled = true;
+        
+        //mettre à jour l'adresse actuelle
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs && tabs[0] && tabs[0].url) {
+            currentUrl = tabs[0].url;
+          }
+        });
       }
     });
   }
@@ -52,6 +73,13 @@ document.addEventListener('DOMContentLoaded', () => {
           if (data.events && data.events.length > 0) {
             currentRecording = data.events;
             saveBtn.disabled = false;
+                    
+            // Mettre à jour l'URL actuelle au début de l'enregistrement
+            chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+              if (tabs && tabs[0] && tabs[0].url) {
+                currentUrl = tabs[0].url;
+              }
+            });
           }
         });
         startBtn.disabled = false;
@@ -65,19 +93,29 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.style.display = "block";
     
     if (isRename) {
-      dialogTitle.textContent = "Rename Recording";
+      dialogTitle.textContent = "Modifier l'enregistrement";
       // Charger le nom actuel
       chrome.storage.local.get(["savedRecordings"], (data) => {
         if (data.savedRecordings) {
           const recording = data.savedRecordings.find(r => r.id === recordingId);
           if (recording) {
-            recordingNameInput.value = recording.name;
+            recordingNameInput.value = recording.name || "";
+            testerNameInput.value = recording.testerName || "";
+            environmentInput.value = recording.environment || "";
+            usLinkInput.value = recording.usLink || "";
+            testUrlInput.value = recording.testUrl || "";
+            prerequisitesInput.value = recording.prerequisites || "";
           }
         }
       });
     } else {
       dialogTitle.textContent = "Save Recording";
       recordingNameInput.value = `Recording ${new Date().toLocaleString()}`;
+      testUrlInput.value = currentUrl;
+      testerNameInput.value = "";
+      environmentInput.value = "";
+      usLinkInput.value = "";
+      prerequisitesInput.value = "";
     }
     
     recordingIdInput.value = recordingId || '';
@@ -99,13 +137,38 @@ document.addEventListener('DOMContentLoaded', () => {
       alert("Please enter a name for this recording");
       return;
     }
+        
+    if (!testerNameInput.value.trim()) {
+      alert("Veuillez entrer le nom du testeur");
+      return;
+    }
+    
+    if (!environmentInput.value.trim()) {
+      alert("Veuillez spécifier l'environnement");
+      return;
+    }  
+
+    if (!testUrlInput.value.trim()) {
+      alert("Veuillez spécifier l'URL du test");
+      return;
+    }
+
+ 
     
     chrome.storage.local.get(["savedRecordings"], (data) => {
       let savedRecordings = data.savedRecordings || [];
       
       if (recordingIdInput.value) {
         savedRecordings = savedRecordings.map(recording => 
-          recording.id === id ? {...recording, name: name} : recording
+          recording.id === id ? {
+            ...recording, 
+            name: name,
+            testerName: testerNameInput.value.trim(),
+            environment: environmentInput.value.trim(),
+            usLink: usLinkInput.value.trim(),
+            testUrl: testUrlInput.value.trim(),
+            prerequisites: prerequisitesInput.value.trim(),
+          } : recording
         );
       } else {
         // C'est un nouvel enregistrement
@@ -113,13 +176,17 @@ document.addEventListener('DOMContentLoaded', () => {
           id: id,
           name: name,
           date: new Date().toISOString(),
-          events: currentRecording
+          events: currentRecording,
+          testerName: testerNameInput.value.trim(),
+          environment: environmentInput.value.trim(),
+          usLink: usLinkInput.value.trim(),
+          testUrl: testUrlInput.value.trim(),
+          prerequisites: prerequisitesInput.value.trim(),
         });
       }
       
       // Sauvegarder dans le stockage
       chrome.storage.local.set({ savedRecordings: savedRecordings }, () => {
-        console.log("Recording saved:", name);
         hideDialog();
         loadSavedRecordings();
         saveBtn.disabled = true;
@@ -151,11 +218,15 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="font-size: 12px; color: #666;">
               ${new Date(recording.date).toLocaleString()} · ${eventsCount} events
             </div>
+            <div style="font-size: 12px; margin-top: 5px;">
+              <strong>Testeur:</strong> ${recording.testerName || 'N/A'} | 
+              <strong>Env:</strong> ${recording.environment || 'N/A'} | 
+            </div>
           </div>
           <div class="actions">
-            <button class="secondary play-btn" data-id="${recording.id}">Play</button>
-            <button class="secondary rename-btn" data-id="${recording.id}">Rename</button>
-            <button class="danger delete-btn" data-id="${recording.id}">Delete</button>
+            <button class="secondary play-btn" data-id="${recording.id}">Jouer</button>
+            <button class="secondary rename-btn" data-id="${recording.id}">Modifier</button>
+            <button class="danger delete-btn" data-id="${recording.id}">Supprimer</button>
           </div>
         `;
         
@@ -198,7 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       
       chrome.storage.local.set({ savedRecordings: updatedRecordings }, () => {
-        console.log("Recording deleted:", recordingId);
         loadSavedRecordings();
       });
     });
@@ -258,10 +328,8 @@ function replayEvents() {
   // Récupérer les événements enregistrés
   chrome.storage.local.get("events", (data) => {
     const events = data.events || [];
-    console.log(`Replaying ${events.length} events`);
     
     if (!events || events.length === 0) {
-      console.log("No events to replay");
       return;
     }
     
@@ -273,7 +341,6 @@ function replayEvents() {
       setTimeout(() => {
         // Traiter différents types d'événements
         if (event.type === "scroll") {
-          console.log(`Scrolling to (${event.scrollX}, ${event.scrollY})`);
           window.scrollTo(event.scrollX, event.scrollY);
         } 
         else if (event.type === "click") {
@@ -294,7 +361,6 @@ function replayEvents() {
             const elementAtPoint = document.elementFromPoint(event.x, event.y);
             
             if (elementAtPoint) {
-              console.log(`Clicking at position (${event.x}, ${event.y}) on element:`, elementAtPoint);
               showClickVisual(event.x, event.y);
               elementAtPoint.dispatchEvent(clickEvent);
             } else {

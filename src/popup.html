@@ -7,6 +7,7 @@
   <style>
     body {
       width: 350px;
+      height: 500px;
       font-family: Arial, sans-serif;
       padding: 10px;
     }
@@ -75,6 +76,7 @@
       border-radius: 8px;
       display: none;
       z-index: 1000;
+      padding: 20px;
     }
     .dialog-backdrop {
       position: fixed;
@@ -85,6 +87,23 @@
       background: rgba(0,0,0,0.5);
       display: none;
       z-index: 900;
+    }
+    .dialog-title{
+      margin-bottom: 10px;
+      font-size: 18px;
+      color: #333;
+    }
+    .recording-name-dialog input {
+      width: calc(100% - 20px);
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .recording-name-dialog label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -106,7 +125,18 @@
   <div class="dialog-backdrop" id="dialog-backdrop"></div>
   <div class="recording-name-dialog" id="recording-name-dialog">
     <h4 id="dialog-title">Save Recording</h4>
+    <label id="input-title">Nom</label>
     <input type="text" id="recording-name" placeholder="Enter a name for this recording">
+    <label id="input-title">User</label>
+    <input type="text" id="tester-name" />
+    <label id="input-title">Environment</label>
+    <input type="text" id="environment" />
+    <label id="input-title">Lien Us</label>
+    <input type="text" id="us-link" placeholder="https://example.com">
+    <label id="input-title">URL de test</label>
+    <input type="text" id="test-url" placeholder="https://example.com">
+    <label id="input-title">Prérequis</label>
+    <input type="text" id="prerequisites" placeholder="e.g. Login required">
     <input type="hidden" id="recording-id">
     <div style="margin-top: 10px; text-align: right;">
       <button id="dialog-cancel" class="secondary">Cancel</button>

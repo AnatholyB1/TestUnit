@@ -1,11 +1,9 @@
-console.log("Content script loaded and running!");
 let eventListeners = null;
 
 
 
 
 function setupEventListeners() {
-  console.log("Setting up all event listeners");
 
   function showClickVisual(x, y) {
     // Créer l'élément visuel
@@ -93,8 +91,6 @@ function setupEventListeners() {
         timestamp: now
       };
       
-      console.log("Scroll recorded:", scrollData);
-      
       chrome.runtime.sendMessage({ 
         action: "addEvent", 
         eventData: scrollData 
@@ -122,15 +118,11 @@ if (eventListeners) {
 
 // Écouter les changements de statut d'enregistrement
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  console.log("Storage changes detected:", changes, "in namespace:", namespace);
   // Vérifier si le changement concerne l'enregistrement
   if (namespace === "local" && changes.recording) {
-    console.log("Recording status changed:", changes.recording);
     if (changes.recording.newValue === true) {
-      console.log("Recording started - adding event listeners");
       eventListeners = setupEventListeners();  // Appel à setupEventListeners() au lieu de setupClickListener()
     } else if (changes.recording.oldValue === true) {
-      console.log("Recording stopped - removing event listeners");
       if (eventListeners) {
         document.removeEventListener("click", eventListeners.click);
         document.removeEventListener("scroll", eventListeners.scroll);
@@ -142,7 +134,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // Vérifier le statut d'enregistrement au chargement
 chrome.storage.local.get("recording", ({ recording }) => {
-  console.log("Content script loaded, recording status:", recording);
   if (recording) {
     eventListeners = setupEventListeners();  // Appel à setupEventListeners() au lieu de setupClickListener()
   }
