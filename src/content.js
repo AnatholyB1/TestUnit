@@ -77,7 +77,6 @@ function setupEventListeners() {
       windowHeight: window.innerHeight
     };
 
-    console.log("Click event data:", clickData);
     
     chrome.runtime.sendMessage({ 
       action: "addEvent", 
@@ -138,9 +137,7 @@ function setupEventListeners() {
       scrollY: window.scrollY,
       timestamp: Date.now()
     };
-    
-    console.log("Input event data:", inputData);
-    
+ 
     // Envoyer les données au background script
     chrome.runtime.sendMessage({
       action: "addEvent",

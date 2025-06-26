@@ -373,7 +373,6 @@ function replayEvents() {
         
         // Utiliser les coordonnées client (viewport) pour trouver l'élément
         const elementAtPoint = document.elementFromPoint(event.pageX, event.pageY);
-        console.log(`Element at (${event.pageX}, ${event.pageY}):`, elementAtPoint, index);
         
         if (elementAtPoint) {
           showClickVisual(event.pageX, event.pageY);
