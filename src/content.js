@@ -7,7 +7,7 @@ function setupEventListeners() {
 
   function showClickVisual(x, y) {
     // Créer l'élément visuel
-    const visual = document.createElement('div');
+    const visual = document.createElement('div')
     
     // Appliquer le style
     Object.assign(visual.style, {
@@ -42,11 +42,27 @@ function setupEventListeners() {
       }, 500);
     }, 500);
   }
+    
+  // Variable pour le débounce
+  let lastClickTime = 0;
+  const debounceTime = 10; // millisecondes
   
   // Handler pour les clics (code existant)
-  const clickHandler = function(e) {
+  const clickHandler = function (e) {
+    
+    const now = Date.now();
+    
+    // Ignorer les clics trop rapprochés dans le temps
+    if (now - lastClickTime < debounceTime) {
+      return;
+    }
+    lastClickTime = now;
+        
+    const currentClientX = e.pageX 
+    const currentClientY = e.pageY 
+
     // Afficher l'effet visuel à l'endroit du clic
-    showClickVisual(e.clientX, e.clientY);
+    showClickVisual(currentClientX, currentClientY);
     
     const clickData = {
       type: "click",  // Ajouter un type d'événement pour distinguer les actions
@@ -60,6 +76,8 @@ function setupEventListeners() {
       windowWidth: window.innerWidth,
       windowHeight: window.innerHeight
     };
+
+    console.log("Click event data:", clickData);
     
     chrome.runtime.sendMessage({ 
       action: "addEvent", 
@@ -97,9 +115,78 @@ function setupEventListeners() {
       });
     }
   };
-  
-  // Ajouter les écouteurs
-  document.addEventListener("click", clickHandler);
+
+  // Handler pour les événements de saisie
+  const inputHandler = function(e) {
+    // Ne traiter que les événements des éléments qui acceptent la saisie
+    if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+      return;
+    }
+    
+    let value = e.target.value;
+    let inputType = e.target.type || 'text';
+    
+    // Créer un sélecteur pour identifier l'élément
+    let selector = getElementSelector(e.target);
+    
+    const inputData = {
+      type: "input",
+      selector: selector,
+      value: value,
+      inputType: inputType,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      timestamp: Date.now()
+    };
+    
+    console.log("Input event data:", inputData);
+    
+    // Envoyer les données au background script
+    chrome.runtime.sendMessage({
+      action: "addEvent",
+      eventData: inputData
+    });
+  };
+
+  // Fonction pour créer un sélecteur CSS unique pour l'élément
+  function getElementSelector(element) {
+    // Stratégie 1: Utiliser l'ID s'il existe
+    if (element.id) {
+      return `#${element.id}`;
+    }
+    
+    // Stratégie 2: Utiliser le nom s'il existe (pour les formulaires)
+    if (element.name) {
+      return `${element.tagName.toLowerCase()}[name="${element.name}"]`;
+    }
+    
+    // Stratégie 3: Construire un chemin avec des sélecteurs nth-child
+    let path = [];
+    let currentElement = element;
+    
+    while (currentElement && currentElement !== document.body) {
+      // Déterminer la position de l'élément parmi ses frères
+      let position = 1;
+      let sibling = currentElement.previousElementSibling;
+      
+      while (sibling) {
+        if (sibling.tagName === currentElement.tagName) {
+          position++;
+        }
+        sibling = sibling.previousElementSibling;
+      }
+      
+      path.unshift(`${currentElement.tagName.toLowerCase()}:nth-of-type(${position})`);
+      currentElement = currentElement.parentElement;
+    }
+    
+    return path.join(' > ');
+  }
+
+  // Ajouter les écouteurs d'événements
+  document.addEventListener("input", inputHandler, { passive: true });
+  document.addEventListener("change", inputHandler, { passive: true }); // Pour les select, checkbox, radio
+  document.addEventListener("click", clickHandler, { capture: true });
   document.addEventListener("scroll", scrollHandler, { passive: true });
   
   // Retourner les handlers pour pouvoir les supprimer plus tard

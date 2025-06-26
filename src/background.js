@@ -24,6 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   else if (message.action === "addEvent") {  // Renommer addClick en addEvent
     if (recordingState.isRecording) {
+      console.log("Event recorded:", message.eventData);
       recordingState.events.push(message.eventData);
       chrome.storage.local.set({ events: recordingState.events });
       sendResponse({ status: "event_recorded", eventCount: recordingState.events.length });

@@ -325,6 +325,21 @@ function replayEvents() {
     }, 500);
   }
 
+
+    // Attendre que le défilement soit terminé
+  function waitForScrollToFinish() {
+    return new Promise(resolve => {
+      // Le défilement peut prendre un certain temps
+      setTimeout(() => {
+        // On attend un peu pour que le navigateur termine l'opération
+        requestAnimationFrame(() => {
+          requestAnimationFrame(resolve);
+        });
+      }, 100);
+    });
+  }
+
+
   // Récupérer les événements enregistrés
   chrome.storage.local.get("events", (data) => {
     const events = data.events || [];
@@ -332,43 +347,101 @@ function replayEvents() {
     if (!events || events.length === 0) {
       return;
     }
-    
-    const baseTime = events[0].timestamp;
-    
-    events.forEach((event) => {
-      const delay = event.timestamp - baseTime;
+
+    let lastProcessedTimestamp = 0;
+    // Fonction pour jouer chaque événement séquentiellement
+    async function playEventSequentially(index) {
+      if (index >= events.length) return;
       
-      setTimeout(() => {
-        // Traiter différents types d'événements
-        if (event.type === "scroll") {
-          window.scrollTo(event.scrollX, event.scrollY);
-        } 
-        else if (event.type === "click") {
-          // Établir la position de défilement d'abord si nécessaire
-          if (window.scrollX !== event.scrollX || window.scrollY !== event.scrollY) {
-            window.scrollTo(event.scrollX, event.scrollY);
+      const event = events[index];
+            
+      if (event.timestamp === lastProcessedTimestamp) {
+        console.warn("Événement déjà traité, ignoré");
+        setTimeout(() => playEventSequentially(index + 1), 10);
+        return;
+      }
+      lastProcessedTimestamp = event.timestamp;
+      
+      // Traiter différents types d'événements
+      if (event.type === "scroll") {
+        window.scrollTo(event.scrollX, event.scrollY);
+        await waitForScrollToFinish();
+      } 
+      else if (event.type === "click") {
+        window.scrollTo(event.scrollX, event.scrollY);
+        await waitForScrollToFinish();
+        
+        // Utiliser les coordonnées client (viewport) pour trouver l'élément
+        const elementAtPoint = document.elementFromPoint(event.pageX, event.pageY);
+        console.log(`Element at (${event.pageX}, ${event.pageY}):`, elementAtPoint, index);
+        
+        if (elementAtPoint) {
+          showClickVisual(event.pageX, event.pageY);
+
+          const clickEvent = new MouseEvent('click', {
+          view: window,
+          bubbles: true,
+          cancelable: true,
+          clientX: event.pageX,
+          clientY: event.pageY
+          });
+          
+          elementAtPoint.dispatchEvent(clickEvent);
+        } else {
+          console.warn(`No element found at position (${event.x}, ${event.y})`);
+        }
+        
+        // Petite pause après le clic
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }else if (event.type === "input") {
+        // D'abord faire défiler la page à la position enregistrée
+        window.scrollTo(event.scrollX, event.scrollY);
+        await waitForScrollToFinish();
+        
+        // Trouver l'élément via le sélecteur
+        const inputElement = document.querySelector(event.selector);
+        
+        if (inputElement) {
+          // Mettre le focus sur l'élément
+          inputElement.focus();
+          
+          // Définir sa valeur
+          inputElement.value = event.value;
+          
+          // Déclencher les événements appropriés pour simuler une saisie réelle
+          inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+          inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          // Pour les select, checkbox et radio qui nécessitent une logique spéciale
+          if (event.inputType === 'checkbox' || event.inputType === 'radio') {
+            inputElement.checked = event.value === 'true' || event.value === true;
+          } else if (event.inputType === 'select-one' || event.inputType === 'select-multiple') {
+            // Pour les éléments select
+            Array.from(inputElement.options).forEach(option => {
+              option.selected = event.value.includes(option.value);
+            });
           }
           
-          setTimeout(() => {
-            const clickEvent = new MouseEvent('click', {
-              view: window,
-              bubbles: true,
-              cancelable: true,
-              clientX: event.x,
-              clientY: event.y
-            });
-            
-            const elementAtPoint = document.elementFromPoint(event.x, event.y);
-            
-            if (elementAtPoint) {
-              showClickVisual(event.x, event.y);
-              elementAtPoint.dispatchEvent(clickEvent);
-            } else {
-              console.warn(`No element found at position (${event.x}, ${event.y})`);
-            }
-          }, 100); // Petit délai après le défilement
+          // Pause après la saisie
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
-      }, delay);
-    });
+        else {
+          console.warn(`Input element not found for selector: ${event.selector}`);
+        }
+      }
+      
+      // Calculer le délai avant le prochain événement
+      let delay = 0;
+      if (index < events.length - 1) {
+        delay = Math.max(100, events[index + 1].timestamp - event.timestamp);
+      }
+      
+      // Passer au prochain événement après le délai
+      setTimeout(() => playEventSequentially(index + 1), delay);
+    }
+
+    // Démarrer la séquence de lecture
+    playEventSequentially(0);    
+
   });
 }
