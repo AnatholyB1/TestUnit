@@ -31,3 +31,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+
+
+// Dans votre background.js
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "testCompleted") {
+    console.log("Test completed:", message.results, "background.js");
+    // Récupérer les informations du test exécuté
+    chrome.storage.local.get(["currentTestId", "savedRecordings"], (data) => {
+      const currentTestId = data.currentTestId;
+      const recordings = data.savedRecordings || [];
+      const currentTest = recordings.find(r => r.id === currentTestId);
+
+      console.log("Current test:", currentTest, "background.js");
+      
+      if (currentTest) {
+        const testReport = {
+          id: Date.now().toString(),
+          testName: currentTest.name,
+          startUrl: currentTest.startUrl || sender.tab.url,
+          date: new Date().toISOString(),
+          duration: message.results ? message.results.duration : 0,
+          eventsTotal: currentTest.events.length,
+          eventsExecuted: message.results ? message.results.eventsExecuted : 0,
+          success: message.results ? message.results.success : true,
+          errors: message.results ? message.results.errors : []
+        };
+        
+        // Ajouter au rapport existant sans écraser
+        chrome.storage.local.get("testReports", (reportData) => {
+          const reports = reportData.testReports || [];
+          reports.push(testReport);
+          chrome.storage.local.set({ testReports: reports }, () => {
+          });
+        });
+      }
+    });
+    
+    return true;
+  }
+});

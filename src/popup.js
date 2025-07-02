@@ -22,6 +22,68 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Conteneur des enregistrements sauvegardés
   const savedRecordingsContainer = document.getElementById("saved-recordings");
+
+  // Fonction pour exporter les résultats de test en CSV et vider le rapport
+  function exportTestResultsAndClear() {
+    chrome.storage.local.get("testReports", (data) => {
+      const reports = data.testReports || [];
+      if (reports.length === 0) {
+        alert("Aucun rapport de test à exporter");
+        return;
+      }
+      
+      // Créer l'en-tête du CSV
+      let csvContent = "ID;Nom du test;Date;URL;Durée (s);Statut;Événements exécutés;Événements total;Erreurs\n";
+      
+      // Ajouter chaque rapport comme une ligne
+      reports.forEach(report => {
+        const status = report.success ? "Succès" : "Échec";
+        const duration = (report.duration / 1000).toFixed(1);
+        const errors = (report.errors || []).map(e => `Étape ${e.step + 1}: ${e.message}`).join(" | ");
+        
+        // Échapper les guillemets et les points-virgules dans les champs texte
+        const safeTestName = report.testName ? report.testName.replace(/"/g, '""') : "Test sans nom";
+        const safeErrors = errors.replace(/"/g, '""');
+        
+        // Créer la ligne CSV
+        const row = [
+          report.id,
+          `"${safeTestName}"`,
+          new Date(report.date).toLocaleString(),
+          `"${report.startUrl || ''}"`,
+          duration,
+          status,
+          report.eventsExecuted,
+          report.eventsTotal,
+          `"${safeErrors}"`
+        ].join(';');
+        
+        csvContent += row + "\n";
+      });
+      
+      // Créer un Blob pour le téléchargement
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      // Créer un lien de téléchargement et le cliquer
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `test-results-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      
+      // Libérer l'URL
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      
+      // Vider le rapport après l'export
+      chrome.storage.local.set({ testReports: [] }, () => {
+      });
+    });
+  }
+
+  // Écouteur pour le bouton d'export
+  document.getElementById("export-csv-btn").addEventListener("click", () => {
+    exportTestResultsAndClear();
+  });
   
   // État actuel
   let currentRecording = null;
@@ -278,6 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function playRecording(recordingId) {
     chrome.storage.local.get(["savedRecordings"], (data) => {
       if (!data.savedRecordings) return;
+
+      chrome.storage.local.set({ currentTestId: recordingId });
       
       const recording = data.savedRecordings.find(r => r.id === recordingId);
       
@@ -347,11 +411,29 @@ function replayEvents() {
     if (!events || events.length === 0) {
       return;
     }
+        
+    const testResults = {
+      success: true,
+      eventsExecuted: 0,
+      errors: [],
+      startTime: Date.now(),
+      duration: 0
+    };
 
     let lastProcessedTimestamp = 0;
     // Fonction pour jouer chaque événement séquentiellement
     async function playEventSequentially(index) {
-      if (index >= events.length) return;
+      if (index >= events.length) {
+        testResults.duration = Date.now() - testResults.startTime;
+        console.log("Test completed", testResults);
+        chrome.runtime.sendMessage({ 
+          action: "testCompleted", 
+          results: testResults 
+        });
+        return;
+      }
+
+      testResults.eventsExecuted++;
       
       const event = events[index];
             
@@ -388,6 +470,11 @@ function replayEvents() {
           elementAtPoint.dispatchEvent(clickEvent);
         } else {
           console.warn(`No element found at position (${event.x}, ${event.y})`);
+          testResults.success = false;
+          testResults.errors.push({
+            step: index,
+            message: `No element found at position (${event.pageX}, ${event.pageY})`
+          });
         }
         
         // Petite pause après le clic
@@ -426,6 +513,11 @@ function replayEvents() {
         }
         else {
           console.warn(`Input element not found for selector: ${event.selector}`);
+          testResults.success = false;
+          testResults.errors.push({
+            step: index,
+            message: `Input element not found for selector: ${event.selector}`
+          });
         }
       }
       

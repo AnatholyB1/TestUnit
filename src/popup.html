@@ -105,6 +105,18 @@
       margin-bottom: 5px;
       font-weight: bold;
     }
+    .action-buttons {
+      margin-top: 15px;
+      text-align: center;
+    }
+    #export-csv-btn {
+      background-color: #34a853;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -142,6 +154,13 @@
       <button id="dialog-cancel" class="secondary">Cancel</button>
       <button id="dialog-save" class="primary">Save</button>
     </div>
+  </div>
+
+
+  <div class="action-buttons">
+    <button id="export-csv-btn" title="Exporter tous les résultats de tests vers Excel">
+      Exporter vers Excel
+    </button>
   </div>
   
   <script src="popup.js"></script>
